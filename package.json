@@ -1,0 +1,24 @@
+{
+	"name": "remote-csp-channel",
+	"version": "1.0.0",
+	"description": "a CSP channel bridge that works remotely",
+	"dependencies": {
+		"asynquence": "latest",
+		"asynquence-contrib": "latest"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git://github.com/getify/remote-csp-channel.git"
+	},
+	"keywords": [
+		"async",
+		"csp"
+	],
+	"bugs": {
+		"url": "https://github.com/getify/remote-csp-channel/issues",
+		"email": "getify@gmail.com"
+	},
+	"homepage": "http://github.com/getify/remote-csp-channel",
+	"author": "Kyle Simpson <getify@gmail.com>",
+	"license": "MIT"
+}
