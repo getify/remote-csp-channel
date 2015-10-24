@@ -13,10 +13,6 @@
 			openChannel: openChannel
 		};
 
-	if (typeof ASQ != "undefined" && ASQ.csp) {
-		hijackCSP(ASQ.csp);
-	}
-
 	return publicAPI;
 
 
@@ -48,7 +44,7 @@
 				chanClose = ch.close;
 
 			ch.close = function $$close() {
-				bridges[bridgeName].close(bridgeName,channelID);
+				bridges[bridgeName].close(channelID);
 				chanClose();
 			};
 
@@ -74,14 +70,14 @@
 		};
 
 		Object.assign(csp,{
-			take: makeCSPMethodWrapper("take",orig),
-			put: makeCSPMethodWrapper("put",orig),
-			alts: makeCSPMethodWrapper("alts",orig),
-			takem: makeCSPMethodWrapper("takem",orig),
-			takeAsync: makeCSPMethodWrapper("takeAsync",orig),
-			takemAsync: makeCSPMethodWrapper("takemAsync",orig),
-			putAsync: makeCSPMethodWrapper("putAsync",orig),
-			altsAsync: makeCSPMethodWrapper("altsAsync",orig)
+			take: makeCSPMethodWrapper("take",orig_csp),
+			put: makeCSPMethodWrapper("put",orig_csp),
+			alts: makeCSPMethodWrapper("alts",orig_csp),
+			takem: makeCSPMethodWrapper("takem",orig_csp),
+			takeAsync: makeCSPMethodWrapper("takeAsync",orig_csp),
+			takemAsync: makeCSPMethodWrapper("takemAsync",orig_csp),
+			putAsync: makeCSPMethodWrapper("putAsync",orig_csp),
+			altsAsync: makeCSPMethodWrapper("altsAsync",orig_csp)
 		});
 	}
 
@@ -102,7 +98,10 @@
 			}
 
 			if (ch.remote && bridges[ch.remote[0]]) {
-				args.unshift(methodName);
+				args.unshift(
+					/*channelID=*/ch.remote[1],
+					/*cspMethod=*/methodName
+				);
 				return bridges[ch.remote[0]].signal.apply(null,args);
 			}
 			else {
