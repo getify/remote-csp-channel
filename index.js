@@ -7,11 +7,15 @@
 
 	var bridges = {},
 		orig_csp,
+		rejected_pr = Promise.reject(),
 		publicAPI = {
 			hijackCSP: hijackCSP,
 			defineBridge: defineBridge,
 			openChannel: openChannel
 		};
+
+	// opting out of false "unhandled rejection" warnings
+	rejected_pr.catch(function noop(){});
 
 	return publicAPI;
 
@@ -27,31 +31,28 @@
 
 		if (bridges[bridgeName]) {
 			ch = getChannel(bufSize || 0);
-
 			ch.remote = [bridgeName,channelID];
-
-			pr = bridges[bridgeName].open(channelID)
-				.then(remoteOpened);
+			pr = bridges[bridgeName].open(ch);
 		}
 
-		return (pr || new Promise(function noop(){}));
+		return (pr || rejected_pr);
 
 
 		// ***************************
 
 		function getChannel(bufSize) {
-			var ch = ASQ.csp.chan(bufSize),
-				chanClose = ch.close;
+			// TODO: factor out `ASQ.csp.chan(..)`
+			var ch = ASQ.csp.chan(bufSize);
 
+			// save original close() method
+			ch.origClose = ch.close;
+
+			// wrap close method: also signal remote close
 			ch.close = function $$close() {
 				bridges[bridgeName].close(channelID);
-				chanClose();
+				ch.origClose();
 			};
 
-			return ch;
-		}
-
-		function remoteOpened() {
 			return ch;
 		}
 	}
