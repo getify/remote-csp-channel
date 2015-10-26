@@ -49,7 +49,7 @@
 		else {
 			worker = workerObj;
 			WWsetup(worker,worker);
-			worker.postMessage("start");
+			WWmessageTo({ start: true });
 		}
 
 
@@ -57,7 +57,9 @@
 
 		function openChannel(channelID) {
 			if (!(channelID in channels)) {
-				WWmessageTo("remote-connected:" + channelID);
+				WWmessageTo({
+					"remote-connected": channelID
+				});
 				channels[channelID] = {};
 				channels[channelID].pr = new Promise(function executor(resolve){
 					channels[channelID].resolve = resolve;
@@ -67,7 +69,9 @@
 		}
 
 		function closeChannel(channelID) {
-			WWmessageTo("remote-closed:" + channelID);
+			WWmessageTo({
+				"remote-closed": channelID
+			});
 		}
 
 		function signalChannel(channelID,cspMethod) {
@@ -79,29 +83,43 @@
 				send_queue.push(msg);
 			}
 			else {
+				if (typeof msg != "string") {
+					msg = JSON.stringify(msg);
+				}
 				msg_target.postMessage(msg);
 			}
 		}
 
 		function WWmessageFrom(evt) {
-			var match, action, channel_id;
+			var action, channel_id, msg;
 
-			if (match = evt.data.match(/^remote-(connected|closed):(.*)$/)) {
-				action = match[1];
-				channel_id = match[2];
+			try {
+				msg = JSON.parse(evt.data);
+			}
+			catch (err) { return; }
 
-				if (action == "connected" &&
+			if (msg["remote-connected"] || msg["remote-closed"]) {
+				action = msg["remote-connected"] ?
+					"remote-connected" :
+					"remote-closed";
+				channel_id = msg[action];
+
+				if (action == "remote-connected" &&
 					channels[channel_id] &&
 					channels[channel_id].resolve
 				) {
 					channels[channel_id].resolve();
 					channels[channel_id].resolve = null;
 				}
-				else if (action == "closed" &&
+				else if (action == "remote-closed" &&
 					channels[channel_id]
 				) {
 					// ..
 				}
+			}
+			else if (msg["remote-signal"]) {
+				channel_id = msg["channel"]
+				// ..
 			}
 		}
 
@@ -139,7 +157,12 @@
 		}
 
 		function WWstart(evt) {
-			if (evt.data === "start") {
+			try {
+				var msg = JSON.parse(evt.data);
+			}
+			catch (err) { return; }
+
+			if (msg.start) {
 				self.removeEventListener("message",WWstart,false);
 				WWsetup(self,self);
 			}
