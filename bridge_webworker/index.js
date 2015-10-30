@@ -21,7 +21,7 @@
 
 	function setup(remote,origCSP,wrapReturn) {
 		remote_csp = remote;
-		orig_csp = origCSP;
+		orig_csp = Object.assign({},origCSP);
 		remote_csp.hijackCSP(origCSP);
 		wrap_return = wrapReturn || function $$promisewrap(v) { return Promise.resolve(v); };
 	}
@@ -84,7 +84,7 @@
 			}
 
 			if (!ch.pending_messages) {
-				ch.pending_messages = {};
+				ch.pending_messages = [];
 			}
 
 			return channels[channel_id].pr;
@@ -100,7 +100,7 @@
 			var inOut = /^put/.test(cspMethod) ? "out" : "in",
 				ch = channels[channelID].ch,
 				args = [].slice.call(arguments,2),
-				entry, id, pr, pr2, ack;
+				entry, id, pr, pr2, ack, msg;
 
 			// found a matching (aka, opposite) entry?
 			entry = findOppositePendingMessageEntry(ch,inOut);
@@ -111,7 +111,7 @@
 				if (message_ids[id]) {
 					// cancel the previous remote pending message
 					WWmessageTo({
-						"remote-message-cancel": channelID,
+						"remote-action-cancel": channelID,
 						"id": id
 					});
 
@@ -123,7 +123,7 @@
 					entry[inOut] = getNewMessageID(inOut + ":" + bridge_context);
 
 					// redo previously remoted action as local instead
-					pr = wrap_return(orig_csp[entry.out_msg.method].apply(null,entry.out_msg.args));
+					pr = wrap_return(orig_csp[entry.waiting_for_ack.method].apply(null,entry.msg_waiting_for_a.args));
 
 					// perform current CSP action as local
 					pr2 = wrap_return(orig_csp[cspMethod].apply(null,args));
@@ -145,22 +145,40 @@
 				}
 			}
 
-			// make a new local entry
-			entry = makePendingMessageEntry(ch,inOut);
-			id = entry.in || entry.out;
+			if (!entry) {
+				// make a new (pending) local entry
+				entry = makePendingMessageEntry(ch,inOut);
+				id = entry.in || entry.out;
+			}
+			else {
+				// add local id to previous entry
+				id = getNewMessageID(inOut + ":" + bridge_context);
+				entry[inOut] = id;
+			}
 
-			entry.out_msg = {
-				"remote-message": channelID,
+			// CSP method with channel as single first param
+			if (/^(?:put|take)/.test(cspMethod)) {
+				args.shift();
+			}
+			else {
+				// TODO: filter out channels from alts(..) / altsAsync(..) args
+			}
+
+			msg = {
+				"remote-action": channelID,
 				"id": id,
 				"method": cspMethod,
 				"args": args
 			};
 
+			// send ack along with message
 			if (ack) {
 				msg.ack = ack;
 			}
 
-			WWmessageTo(entry.out_msg);
+			WWmessageTo(msg);
+
+			entry.waiting_for_ack = msg;
 
 			return entry.pr;
 
@@ -168,19 +186,19 @@
 			// *******************************
 
 			function cleanupEntry() {
-				killMessageEntry(entry);
+				ClearMessageEntry(entry);
 			}
 		}
 
-		function killMessageEntry(entry) {
+		function ClearMessageEntry(entry) {
 			delete message_ids[entry.in];
 			delete message_ids[entry.out];
-			entry.resolve = entry.reject = entry.pr = entry.out_msg =
+			entry.resolve = entry.reject = entry.pr = entry.waiting_for_ack =
 				entry.ack = entry.in = entry.out = null;
 		}
 
 		function findPendingMessageEntry(ch,msgID,remove) {
-			var inOut = /(in|out):/.match(msgID)[1], entry;
+			var inOut = msgID.match(/^(in|out):/)[1], entry;
 
 			for (var i=0; i<ch.pending_messages.length; i++) {
 				if (ch.pending_messages[i][inOut] == msgID) {
@@ -205,6 +223,7 @@
 			do { var id = prefix + ":" + Math.random(); }
 			while (id in message_ids);
 			message_ids[id] = true;
+			return id;
 		}
 
 		function makePendingMessageEntry(ch,inOut) {
@@ -235,7 +254,7 @@
 		}
 
 		function WWmessageFrom(evt) {
-			var action, channel_id, msg, args, entry, pr;
+			var action, channel_id, msg, args, entry, inOut;
 
 			try {
 				msg = JSON.parse(evt.data);
@@ -279,38 +298,100 @@
 					channels[channel_id].resolve = channels[channel_id].reject = null;
 				}
 			}
-			else if (msg["remote-message"]) {
-				channel_id = msg["remote-message"];
+			else if (msg["remote-action"]) {
+				channel_id = msg["remote-action"];
 
 				// recognized local CSP method?
-				if (orig_csp[msg["method"]]) {
-					// add `ch` to list of args
-					args = [channels[channel_id].ch].concat(msg["args"]);
+				if (orig_csp[msg.method]) {
+					// check for opposite matching entry to attach to
+					inOut = msg.id.match(/^(in|out):/)[1];
+					entry = findOppositePendingMessageEntry(channels[channel_id].ch,inOut);
+					if (entry) {
+						// add remote msg id
+						entry[inOut] = msg.id;
 
-					// invoke the original (non-wrapped) CSP method
-					pr = wrap_return(orig_csp[msg["method"]].apply(null,args));
+						// send ack
+						WWmessageTo({
+							"remote-action-ack": channel_id,
+							id: msg.id
+						});
 
-					// TODO:
-					// 1. check for opposite matching entry
-					// 2. resolve and send ack if so
-					// 3. check for and handle 'ack' in msg
+						// ack bundled in with message, and entry now complete?
+						if (msg.ack && entry.in && entry.out) {
+							// remove the entry
+							entry = findPendingMessageEntry(
+								channels[channel_id].ch,
+								msg.ack,
+								/*remove=*/true
+							);
+
+							// double check that we actually found/removed the entry?
+							if (entry) {
+								// add channel to list of args
+								args = [channels[channel_id].ch].concat(entry.waiting_for_ack.args);
+
+								// run CSP action for now-ack'd local msg
+								wrap_return(
+									orig_csp[entry.waiting_for_ack.method].apply(null,args)
+								)
+								.then(entry.resolve,entry.reject);
+
+								ClearMessageEntry(entry);
+							}
+						}
+					}
+					// no entry found, so make one to wait for local action
+					else {
+						entry = { in: null, out: null };
+						entry[inOut] = msg.id;
+						ch.pending_messages.push(entry);
+					}
+
+					// add channel to list of args
+					args = [channels[channel_id].ch].concat(msg.args);
+
+					// run CSP action from remote msg
+					orig_csp[msg.method].apply(null,args);
 				}
 			}
-			else if (msg["remote-message-ack"]) {
-				channel_id = msg["remote-message-ack"];
+			else if (msg["remote-action-ack"]) {
+				channel_id = msg["remote-action-ack"];
 
-				// TODO: find matching entry, resolve promise if
-				// in/out/ack are all present
+				entry = findPendingMessageEntry(
+					channels[channel_id].ch,
+					msg.id
+				);
+
+				// entry complete now that is has ack and both in/out id's?
+				if (entry.in && entry.out) {
+					// remove the entry
+					entry = findPendingMessageEntry(
+						channels[channel_id].ch,
+						msg.id,
+						/*remove=*/true
+					);
+
+					// add channel to list of args
+					args = [channels[channel_id].ch].concat(entry.waiting_for_ack.args);
+
+					// run CSP action for now-ack'd local msg
+					wrap_return(
+						orig_csp[entry.waiting_for_ack.method].apply(null,args)
+					)
+					.then(entry.resolve,entry.reject);
+
+					ClearMessageEntry(entry);
+				}
 			}
-			else if (msg["remote-message-cancel"]) {
-				channel_id = msg["remote-message-cancel"];
+			else if (msg["remote-action-cancel"]) {
+				channel_id = msg["remote-action-cancel"];
 				if (channels[channel_id].ch) {
 					entry = findPendingMessageEntry(
 						channels[channel_id].ch,
 						msg["id"],
 						/*remove=*/true
 					);
-					killMessageEntry(entry);
+					ClearMessageEntry(entry);
 
 					// TODO: remove the local channel's queue action!
 				}
