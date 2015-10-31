@@ -99,7 +99,7 @@
 		function signalChannel(channelID,cspMethod) {
 			var inOut = /^put/.test(cspMethod) ? "out" : "in",
 				ch = channels[channelID].ch,
-				args = [].slice.call(arguments,2),
+				args = [].slice.call(arguments,2), args2,
 				entry, id, pr, pr2, ack, msg;
 
 			// found a matching (aka, opposite) entry?
@@ -119,11 +119,12 @@
 					findPendingMessageEntry(ch,id,/*remove=*/true);
 
 					// fake entry state as if remote signaling had completed
-					entry.ack = id;
 					entry[inOut] = getNewMessageID(inOut + ":" + bridge_context);
 
+					args2 = [ch].concat(entry.waiting_for_ack.args);
+
 					// redo previously remoted action as local instead
-					pr = wrap_return(orig_csp[entry.waiting_for_ack.method].apply(null,entry.msg_waiting_for_a.args));
+					pr = wrap_return(orig_csp[entry.waiting_for_ack.method].apply(null,args2));
 
 					// perform current CSP action as local
 					pr2 = wrap_return(orig_csp[cspMethod].apply(null,args));
@@ -344,7 +345,7 @@
 					else {
 						entry = { in: null, out: null };
 						entry[inOut] = msg.id;
-						ch.pending_messages.push(entry);
+						channels[channel_id].ch.pending_messages.push(entry);
 					}
 
 					// add channel to list of args
