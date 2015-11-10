@@ -2,10 +2,10 @@
 	if (typeof define === "function" && define.amd) { define(definition); }
 	else if (typeof module !== "undefined" && module.exports) { module.exports = definition(); }
 	else { context[name] = definition(name,context); }
-})("BridgeWebWorker",this,function DEF(name,context){
+})("TransportWebWorker",this,function DEF(name,namespaceContext){
 	"use strict";
 
-	var bridge_context,
+	var context,
 		publicAPI = {
 			connect: connect
 		};
@@ -23,21 +23,21 @@
 
 			// in shared worker?
 			if ("onconnect" in self) {
-				bridge_context = "shared-worker";
+				context = "shared-worker";
 				self.addEventListener("connect",onConnect,false);
 			}
 			// assume regular worker
 			else {
-				bridge_context = "regular-worker";
+				context = "regular-worker";
 				self.addEventListener("message",onStart,false);
 			}
 		}
 		// assume main window
 		else {
-			bridge_context = "main";
+			context = "main";
 			worker = workerObj;
 			setup(worker,worker);
-			sendMessage({ start: true, "msg-source": bridge_context });	// TODO: remove `msg-source`?
+			sendMessage({ start: true, "msg-source": context });	// TODO: remove `msg-source`?
 		}
 
 		return {
@@ -53,7 +53,7 @@
 		}
 
 		function sendMessage(msg) {
-			msg["msg-source"] = bridge_context;
+			msg["msg-source"] = context;
 
 			if (!msg_target) {
 				send_queue.push(msg);

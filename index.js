@@ -5,8 +5,8 @@
 })("RemoteCSPChannel",this,function DEF(name,context){
 	"use strict";
 
-	var bridges = {},
-		channel_bridge = {},
+	var transports = {},
+		channel_transport = {},
 		message_ids = {},
 		pre_channel_queue = {},
 		wrap_csp_return,
@@ -14,7 +14,7 @@
 		rejected_pr = Promise.reject(),
 		publicAPI = {
 			initCSP: initCSP,
-			defineBridge: defineBridge,
+			defineTransport: defineTransport,
 			openChannel: openChannel
 		};
 
@@ -70,9 +70,9 @@
 					}
 				}
 
-				if (ch.remote && bridges[ch.remote[0]]) {
+				if (ch.remote && transports[ch.remote[0]]) {
 					args.unshift(
-						/*bridgeName=*/ch.remote[0],
+						/*transportName=*/ch.remote[0],
 						/*channelID=*/ch.remote[1],
 						/*cspMethod=*/methodName
 					);
@@ -85,8 +85,8 @@
 		}
 	}
 
-	function defineBridge(bridgeName,handlers) {
-		bridges[bridgeName] = {
+	function defineTransport(transportName,handlers) {
+		transports[transportName] = {
 			channels: {},
 			sendMessage: handlers.sendMessage
 		};
@@ -94,13 +94,13 @@
 		handlers.onMessage(onMessage);
 	}
 
-	function openChannel(bridgeName,channelID,bufSize) {
+	function openChannel(transportName,channelID,bufSize) {
 		var pr, ch;
 
-		if (bridges[bridgeName]) {
-			channel_bridge[channelID] = bridgeName;
+		if (transports[transportName]) {
+			channel_transport[channelID] = transportName;
 			ch = getChannel(bufSize || 0);
-			ch.remote = [bridgeName,channelID];
+			ch.remote = [transportName,channelID];
 			pr = connectChannel(ch);
 		}
 
@@ -118,7 +118,7 @@
 
 			// wrap close method: also signal remote close
 			ch.close = function $$close() {
-				closeChannel(bridgeName,channelID);
+				closeChannel(transportName,channelID);
 				ch.origClose();
 			};
 
@@ -127,15 +127,15 @@
 	}
 
 	function connectChannel(ch) {
-		var msg, bridge_name = ch.remote[0],
+		var msg, transport_name = ch.remote[0],
 			channel_id = ch.remote[1],
-			chan_entry = bridges[bridge_name].channels[channel_id];
+			chan_entry = transports[transport_name].channels[channel_id];
 
 		// first time this channel-ID is trying to be opened?
 		if (!chan_entry || chan_entry.resolve) {
 			// no local channel entry yet?
 			if (!chan_entry) {
-				chan_entry = bridges[bridge_name].channels[channel_id] =
+				chan_entry = transports[transport_name].channels[channel_id] =
 					channelPendingEntry({ ch: ch });
 			}
 			// otherwise, remote channel connection already received
@@ -145,7 +145,7 @@
 				chan_entry.resolve = chan_entry.reject = null;
 			}
 
-			messageTo(bridge_name,{
+			messageTo(transport_name,{
 				"remote-connected": channel_id
 			});
 
@@ -164,15 +164,15 @@
 		return chan_entry.pr;
 	}
 
-	function closeChannel(bridgeName,channelID) {
-		messageTo(bridgeName,{
+	function closeChannel(transportName,channelID) {
+		messageTo(transportName,{
 			"remote-closed": channelID
 		});
 	}
 
-	function signalChannel(bridgeName,channelID,cspMethod) {
+	function signalChannel(transportName,channelID,cspMethod) {
 		var in_out = /^put/.test(cspMethod) ? "out" : "in",
-			ch = bridges[bridgeName].channels[channelID].ch,
+			ch = transports[transportName].channels[channelID].ch,
 			args = [].slice.call(arguments,3), args2,
 			msg_entry, id, pr, pr2, ack, msg;
 
@@ -184,7 +184,7 @@
 			// local entry?
 			if (message_ids[id]) {
 				// cancel the previous remote pending message
-				messageTo(bridgeName,{
+				messageTo(transportName,{
 					"remote-action-cancel": channelID,
 					"id": id
 				});
@@ -193,7 +193,7 @@
 				findPendingMessageEntry(ch,id,/*remove=*/true);
 
 				// fake entry state as if remote signaling had completed
-				msg_entry[in_out] = getNewMessageID(in_out + ":" + bridge_name);
+				msg_entry[in_out] = getNewMessageID(in_out + ":" + transport_name);
 
 				args2 = [ch].concat(msg_entry.waiting_for_ack.args);
 
@@ -227,7 +227,7 @@
 		}
 		else {
 			// add local id to previous entry
-			id = getNewMessageID(in_out + ":" + bridgeName);
+			id = getNewMessageID(in_out + ":" + transportName);
 			msg_entry[in_out] = id;
 		}
 
@@ -251,7 +251,7 @@
 			msg.ack = ack;
 		}
 
-		messageTo(bridgeName,msg);
+		messageTo(transportName,msg);
 
 		msg_entry.waiting_for_ack = msg;
 
@@ -302,8 +302,8 @@
 	}
 
 	function makePendingMessageEntry(ch,inOut) {
-		var bridge_name = ch.remote[0],
-			id = getNewMessageID(inOut + ":" + bridge_name);
+		var transport_name = ch.remote[0],
+			id = getNewMessageID(inOut + ":" + transport_name);
 
 		var msg_entry = { in: null, out: null };
 		msg_entry[inOut] = id;
@@ -316,13 +316,13 @@
 		return msg_entry;
 	}
 
-	function messageTo(bridgeName,msg) {
-		bridges[bridgeName].sendMessage(msg);
+	function messageTo(transportName,msg) {
+		transports[transportName].sendMessage(msg);
 	}
 
 	function onMessage(msg) {
 		var action, channel_id, args, msg_entry, in_out,
-			bridge_name, chan_entry;
+			transport_name, chan_entry;
 
 		if (("remote-connected" in msg) || ("remote-closed" in msg)) {
 			action = ("remote-connected" in msg) ?
@@ -330,16 +330,16 @@
 				"remote-closed";
 			channel_id = msg[action];
 
-			// bridge+channel opened locally?
-			if (channel_bridge[channel_id]) {
-				bridge_name = channel_bridge[channel_id];
-				chan_entry = bridges[bridge_name].channels[channel_id];
+			// transport+channel opened locally?
+			if (channel_transport[channel_id]) {
+				transport_name = channel_transport[channel_id];
+				chan_entry = transports[transport_name].channels[channel_id];
 
 				// remote channel connection signal?
 				if (action == "remote-connected") {
 					// local channel entry not yet defined?
 					if (!chan_entry) {
-						chan_entry = bridges[bridge_name].channels[channel_id] =
+						chan_entry = transports[transport_name].channels[channel_id] =
 							channelPendingEntry({});
 					}
 					// local channel still pending on remote open?
@@ -367,7 +367,7 @@
 					chan_entry.resolve = chan_entry.reject = null;
 				}
 			}
-			// defer message while bridge+channel is not yet open
+			// defer message while transport+channel is not yet open
 			else {
 				pre_channel_queue[channel_id] = pre_channel_queue[channel_id] || [];
 				pre_channel_queue[channel_id].push(msg);
@@ -375,8 +375,8 @@
 		}
 		else if (msg["remote-action"]) {
 			channel_id = msg["remote-action"];
-			bridge_name = channel_bridge[channel_id];
-			chan_entry = bridges[bridge_name].channels[channel_id];
+			transport_name = channel_transport[channel_id];
+			chan_entry = transports[transport_name].channels[channel_id];
 
 			// recognized local CSP method?
 			if (orig_csp[msg.method]) {
@@ -388,7 +388,7 @@
 					msg_entry[in_out] = msg.id;
 
 					// send ack
-					messageTo(bridge_name,{
+					messageTo(transport_name,{
 						"remote-action-ack": channel_id,
 						id: msg.id
 					});
@@ -437,8 +437,8 @@
 		}
 		else if (msg["remote-action-ack"]) {
 			channel_id = msg["remote-action-ack"];
-			bridge_name = channel_bridge[channel_id];
-			chan_entry = bridges[bridge_name].channels[channel_id];
+			transport_name = channel_transport[channel_id];
+			chan_entry = transports[transport_name].channels[channel_id];
 
 			msg_entry = findPendingMessageEntry(
 				chan_entry.ch,
@@ -470,8 +470,8 @@
 		}
 		else if (msg["remote-action-cancel"]) {
 			channel_id = msg["remote-action-cancel"];
-			bridge_name = channel_bridge[channel_id];
-			chan_entry = bridges[bridge_name].channels[channel_id];
+			transport_name = channel_transport[channel_id];
+			chan_entry = transports[transport_name].channels[channel_id];
 
 			if (chan_entry.ch) {
 				msg_entry = findPendingMessageEntry(
