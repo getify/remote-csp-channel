@@ -2,7 +2,7 @@
 	if (typeof define === "function" && define.amd) { define(definition); }
 	else if (typeof module !== "undefined" && module.exports) { module.exports = definition(); }
 	else { context[name] = definition(name,context); }
-})("RemoteCSPChannel",this,function DEF(name,context){
+})("RemoteCSPChannel",this,function DEF(name,namespaceContext){
 	"use strict";
 
 	var transports = {},
@@ -10,6 +10,7 @@
 		message_ids = {},
 		pre_channel_queue = {},
 		wrap_csp_return,
+		channel_factory,
 		orig_csp,
 		rejected_pr = Promise.reject(),
 		publicAPI = {
@@ -31,7 +32,18 @@
 		return Promise.resolve(v);
 	}
 
-	function initCSP(CSP,wrapCSPReturn) {
+	function defaultChannelFactory() {
+		if (namespaceContext &&
+			typeof namespaceContext.chan !== "undefined"
+		) {
+			return namespaceContext.chan.apply(null,arguments);
+		}
+
+		throw "Missing default channel factory method";
+	}
+
+	function initCSP(CSP,channelFactory,wrapCSPReturn) {
+		channel_factory = channelFactory || defaultChannelFactory;
 		wrap_csp_return = wrapCSPReturn || defaultPromiseWrap;
 
 		// save existing API methods
@@ -97,12 +109,12 @@
 		adapter.onMessage(onMessage);
 	}
 
-	function openChannel(transportName,channelID,bufSize) {
-		var pr, ch;
+	function openChannel(transportName,channelID) {
+		var pr, ch, args = [].slice.call(arguments,2);
 
 		if (transports[transportName]) {
 			channel_transport[channelID] = transportName;
-			ch = getChannel(bufSize || 0);
+			ch = getChannel.apply(null,args);
 			ch.remote = [transportName,channelID];
 			pr = connectChannel(ch);
 		}
@@ -112,9 +124,8 @@
 
 		// ***************************
 
-		function getChannel(bufSize) {
-			// TODO: factor out `ASQ.csp.chan(..)`
-			var ch = ASQ.csp.chan(bufSize);
+		function getChannel() {
+			var ch = channel_factory.apply(null,arguments);
 
 			// save original close() method
 			ch.origClose = ch.close;
