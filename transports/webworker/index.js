@@ -28,7 +28,7 @@
 			}
 			// assume regular worker
 			else {
-				context = "regular-worker";
+				context = "dedicated-worker";
 				self.addEventListener("message",onStart,false);
 			}
 		}
