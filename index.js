@@ -98,6 +98,10 @@
 	}
 
 	function defineTransport(transportName,transport) {
+		if (transports[transportName]) {
+			throw "Transport '" + transportName + "' already defined";
+		}
+
 		var args = [].slice.call(arguments,2),
 			adapter = transport.connect.apply(null,args);
 
