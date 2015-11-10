@@ -243,6 +243,7 @@
 			// add local id to previous entry
 			id = getNewMessageID(in_out + ":" + transportName);
 			msg_entry[in_out] = id;
+			addPromiseToEntry(msg_entry);
 		}
 
 		// CSP method with channel as single first param
@@ -321,13 +322,17 @@
 
 		var msg_entry = { in: null, out: null };
 		msg_entry[inOut] = id;
-		msg_entry.pr = new Promise(function executor(resolve,reject){
-			msg_entry.resolve = resolve;
-			msg_entry.reject = reject;
-		});
+		addPromiseToEntry(msg_entry);
 		ch.pending_messages.push(msg_entry);
 
 		return msg_entry;
+	}
+
+	function addPromiseToEntry(msgEntry) {
+		msgEntry.pr = new Promise(function executor(resolve,reject){
+			msgEntry.resolve = resolve;
+			msgEntry.reject = reject;
+		});
 	}
 
 	function messageTo(transportName,msg) {
