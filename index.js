@@ -85,13 +85,16 @@
 		}
 	}
 
-	function defineTransport(transportName,handlers) {
+	function defineTransport(transportName,transport) {
+		var args = [].slice.call(arguments,2),
+			adapter = transport.connect.apply(null,args);
+
 		transports[transportName] = {
 			channels: {},
-			sendMessage: handlers.sendMessage
+			sendMessage: adapter.sendMessage
 		};
 
-		handlers.onMessage(onMessage);
+		adapter.onMessage(onMessage);
 	}
 
 	function openChannel(transportName,channelID,bufSize) {
