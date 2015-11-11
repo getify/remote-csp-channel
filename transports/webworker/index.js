@@ -5,39 +5,87 @@
 })("TransportWebWorker",this,function DEF(name,namespaceContext){
 	"use strict";
 
-	var context,
+	var connection_defined = false,
+		connect_evt,
+		start_evt,
+		message_evts = [],
+		context = "main",
+
 		publicAPI = {
 			connect: connect
 		};
+
+	saveEvents();
 
 	return publicAPI;
 
 
 	// *******************************
 
-	function connect(workerObj) {
-		var worker, msgHandler, send_queue = [], msg_target;
-
+	function saveEvents() {
 		if (typeof window == "undefined") {
-			worker = true;
-
 			// in shared worker?
 			if ("onconnect" in self) {
 				context = "shared-worker";
-				self.addEventListener("connect",onConnect,false);
+				self.addEventListener("connect",saveConnect,false);
 			}
 			// assume regular worker
 			else {
 				context = "dedicated-worker";
-				self.addEventListener("message",onStart,false);
+				self.addEventListener("message",saveMessages,false);
 			}
 		}
-		// assume main window
-		else {
-			context = "main";
-			worker = workerObj;
-			setup(worker,worker);
-			sendMessage({ start: true, "msg-source": context });	// TODO: remove `msg-source`?
+	}
+
+	function saveConnect(evt) {
+		connect_evt = evt;
+	}
+
+	function saveMessages(evt) {
+		message_evts.push(evt);
+	}
+
+	function connect(workerObj) {
+		var connect_context = context, msg_handler,
+			send_queue = [], msg_target;
+
+		// on initial connection?
+		if (!connection_defined) {
+			connection_defined = true;
+
+			if (connect_context == "shared-worker") {
+				self.removeEventListener("connect",saveConnect,false);
+				if (connect_evt) {
+					onConnect(connect_evt);
+				}
+			}
+			else if (connect_context == "dedicated-worker") {
+				self.removeEventListener("message",saveMessages,false);
+				if (message_evts.length > 0) {
+					start_evt = message_evts.shift();
+					onStart(start_evt);
+				}
+			}
+		}
+
+		if (workerObj) {
+			if (connect_context != "main") {
+				connect_context += "-main";
+			}
+			setup(workerObj,workerObj);
+			sendMessage({ start: true });
+		}
+		else if (connect_context == "shared-worker") {
+			if (!connect_evt) {
+				self.addEventListener("connect",onConnect,false);
+			}
+			connect_evt = null;
+		}
+		else if (connect_context == "dedicated-worker") {
+			if (!start_evt) {
+				self.addEventListener("message",onStart,false);
+			}
+			start_evt = null;
 		}
 
 		return {
@@ -49,11 +97,21 @@
 		// *******************************
 
 		function defineMessageHandler(handler) {
-			msgHandler = handler;
+			if (!msg_handler) {
+				msg_handler = handler;
+
+				if (message_evts.length > 0) {
+					message_evts.forEach(onMessage);
+				}
+				message_evts.length = 0;
+			}
+			else {
+				msg_handler = handler;
+			}
 		}
 
 		function sendMessage(msg) {
-			msg["msg-source"] = context;
+			msg["msg-source"] = connect_context;
 
 			if (!msg_target) {
 				send_queue.push(msg);
@@ -75,8 +133,8 @@
 			}
 			catch (err) { return; }
 
-			if (msgHandler) {
-				msgHandler(msg);
+			if (msg_handler) {
+				msg_handler(msg);
 			}
 		}
 
