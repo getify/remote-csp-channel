@@ -2,6 +2,7 @@
 	"name": "remote-csp-channel",
 	"version": "1.0.0",
 	"description": "a CSP channel bridge that works remotely",
+	"main": "index.js",
 	"dependencies": {
 		"asynquence": "latest",
 		"asynquence-contrib": "latest"
