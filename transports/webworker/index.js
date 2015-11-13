@@ -117,10 +117,7 @@
 				send_queue.push(msg);
 			}
 			else {
-				if (typeof msg != "string") {
-					msg = JSON.stringify(msg);
-				}
-
+				msg = JSON.stringify(msg);
 				msg_target.postMessage(msg);
 			}
 		}
