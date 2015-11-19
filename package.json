@@ -1,7 +1,7 @@
 {
 	"name": "remote-csp-channel",
 	"version": "1.0.0",
-	"description": "a CSP channel bridge that works remotely",
+	"description": "CSP channel that bridges to remote contexts",
 	"main": "index.js",
 	"devDependencies": {
 		"asynquence": "latest",
