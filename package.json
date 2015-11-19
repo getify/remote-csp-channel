@@ -3,9 +3,10 @@
 	"version": "1.0.0",
 	"description": "a CSP channel bridge that works remotely",
 	"main": "index.js",
-	"dependencies": {
+	"devDependencies": {
 		"asynquence": "latest",
-		"asynquence-contrib": "latest"
+		"asynquence-contrib": "latest",
+		"socket.io": "~1.3.7"
 	},
 	"repository": {
 		"type": "git",
