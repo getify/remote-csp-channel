@@ -2,7 +2,7 @@
 	if (typeof define === "function" && define.amd) { define(definition); }
 	else if (typeof module !== "undefined" && module.exports) { module.exports = definition(); }
 	else { context[name] = definition(name,context); }
-})("TransportChildProc",this,function DEF(name,namespaceContext){
+})("TransportNodeStream",this,function DEF(name,namespaceContext){
 	"use strict";
 
 	var context = "main",
