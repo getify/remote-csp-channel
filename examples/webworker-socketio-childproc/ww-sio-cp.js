@@ -33,7 +33,7 @@
 			channel_id = getNewChannelID("WWCH");
 
 		RemoteCSPChannel.defineTransport(
-			/*transportName=*/transport_id,
+			/*transportID=*/transport_id,
 			/*transport=*/TransportWebWorker,
 
 			// transport args:
@@ -54,7 +54,7 @@
 			);
 
 		RemoteCSPChannel.defineTransport(
-			/*transportName=*/transport_id,
+			/*transportID=*/transport_id,
 			/*transport=*/TransportSocketIO,
 
 			// transport args:

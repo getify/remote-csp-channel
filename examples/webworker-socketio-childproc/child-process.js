@@ -25,7 +25,7 @@ function *childProc(){
 		channel_id = process.argv[3] || "CPCH";
 
 	RemoteCSPChannel.defineTransport(
-		/*transportName=*/transport_id,
+		/*transportID=*/transport_id,
 		/*transport=*/TransportNodeStream,
 
 		// transport args:

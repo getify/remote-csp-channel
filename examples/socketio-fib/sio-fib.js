@@ -21,7 +21,7 @@
 	);
 
 	RemoteCSPChannel.defineTransport(
-		/*transportName=*/transport_id,
+		/*transportID=*/transport_id,
 		/*transport=*/TransportSocketIO,
 
 		// transport args:

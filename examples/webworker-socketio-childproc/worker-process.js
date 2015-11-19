@@ -27,7 +27,7 @@ function *workerProc(){
 		channel_id = params.ch || "WWCH";
 
 	RemoteCSPChannel.defineTransport(
-		/*transportName=*/transport_id,
+		/*transportID=*/transport_id,
 		/*transport=*/TransportWebWorker
 	);
 
