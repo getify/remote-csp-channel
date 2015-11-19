@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pi Digits - Remote CSP (Web Worker)</title>
+<style>
+#main { font-size: 350%; font-weight: bold; }
+#between-digits { display: none; }
+</style>
+</head>
+<body>
+<h1>Pi Digits - Remote CSP (Web Worker)</h1>
+<p>Note: because of floating point precision, digits only accurate up to PI(31)...</p>
+
+<p id="main">
+PI(<span id="digit-count">0</span>):</span> <span id="first-digits">3.</span><span id="between-digits">&hellip;</span><span id="recent-digits"></span>
+</p>
+
+<script src="../../node_modules/asynquence/asq.js"></script>
+<script src="../../node_modules/asynquence-contrib/contrib-es6.src.js"></script>
+<script src="../../index.js"></script> <!-- RemoteCSPChannel -->
+<script src="../../transports/webworker/index.js"></script>
+<script src="ww-pi.js"></script>
+
+</body>
+</html>

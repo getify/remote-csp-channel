@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fibonacci - Remote CSP (Socket.io)</title>
+<style>
+#question, #answer { font-size: 350%; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Fibonacci - Remote CSP (Socket.io)</h1>
+
+<span id="question">FIB(42):</span> <span id="answer">...</span>
+
+<script src="http://localhost:8005/socket.io/socket.io.js"></script>
+<script src="../../node_modules/asynquence/asq.js"></script>
+<script src="../../node_modules/asynquence-contrib/contrib-es6.src.js"></script>
+<script src="../../index.js"></script> <!-- RemoteCSPChannel -->
+<script src="../../transports/socketio/index.js"></script>
+<script src="sio-fib.js"></script>
+
+</body>
+</html>
