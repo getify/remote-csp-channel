@@ -26,14 +26,14 @@ Transports are responsible for ensuring messages are delivered in both direction
 
 ### Building Your Own Transport
 
-The easiest transport to inspect to see how to define other transports is the [`transports/socketio`](../../tree/master/transports/socketio/index.js) transport.
+The simplest/easiest transport to inspect to see how to define other transports is the [`transports/socketio`](../../tree/master/transports/socketio/index.js) transport.
 
-A transport must expose a public API method called `connect(..)`. Arguments to this `connect(..)` method passed by the `RemoteCSPChannel.defineTransport(..)` utility (see below).
+A transport must expose a public API method called `connect(..)`. Arguments to this `connect(..)` method come from the optional arguments to the [`RemoteCSPChannel.defineTransport(..)`](#define-transport) utility.
 
 `connect(..)` must return an object with two members:
 
-* `onMessage(..)`: this method will be called once by `RemoteCSPChannel` and passed a single function reference as argument; save a reference to that received function. Any time a message is received from the remote context, pass it to the saved function so that `RemoteCSPChannel` can handle it.
-* `sendMessage(..)`: this method will be called automatically by `RemoteCSPChannel` any time it needs to send a message to the remote context. It will receive a single argument which is a message object. You must serialize and/or transfer that message to the remote context, and ensure it's reconstructed (as necessary) as the message object.
+* `onMessage(..)`: this method will be called once by `RemoteCSPChannel` and passed a single function reference as argument. Make sure to save a reference to that received function; any time a message is received from the remote context, pass it to this saved function so that `RemoteCSPChannel` can handle it.
+* `sendMessage(..)`: this method will be called automatically by `RemoteCSPChannel` any time it needs to send a message to the remote context. It will pass a single argument which is a message object (JSON-compatible). You must serialize and/or transfer that message to the remote context, and ensure it's reconstructed (as necessary) as the message object.
 
 **Note:** You do not need to implement any special signaling/ACKing protocols, as the `RemoteCSPChannel` handles that. However, depending on the nuances of the transport type, other message stream processing may be necessary. For example, see `transports/nodestream` for how message delimiter text is added and parsed, to counteract OS level message bundling that happens over certain types of I/O streams.
 
@@ -85,7 +85,7 @@ RemoteCSPChannel.defineTransport(
 
 `%transport-type%` is the chosen transport factory (like `TransportSocketIO`). See [Transports](#transports) for available options.
 
-`%transport-args` (optional) specify arguments to pass along automatically to the transport factory. For example, if the browser is spinning up a web worker bridged channel, you'd need to create a `new Worker(" .. ")` instance to pass in.
+`%transport-args%` (optional) specify arguments to pass along to the transport factory's `connect(..)` method. For example, if you're spinning up a web worker bridged channel from a browser, you'd need to create a `new Worker(..)` instance to pass along as a `%transport-args%` argument.
 
 ### Open Channel
 
@@ -100,9 +100,9 @@ var pr = RemoteCSPChannel.openChannel(
 
 `%transport-id%` is the same string value you used to define the transport you want to use.
 
-`%channel-id` is a unique string value that represents a channel. This ID must be globally unique (not per transport) and must match on both sides of your remote CSP.
+`%channel-id` is a unique string value that represents a channel. This ID must be application-wide unique (not per transport) and must match on both sides of your remote CSP.
 
-`openChannel(..)` returns promise for the channel, which will resolve with the actual channel object once it's been opened on both sides of your remote CSP. You can wait for that channel value resolution using a normal `Promise#then(..)` approach, or (preferred) `yield` in a generator.
+`openChannel(..)` returns a promise for the channel, which will resolve with the actual channel object once it's been fully opened both locally and remote. You can wait for that channel value resolution using a normal `Promise#then(..)` approach, or (preferred) `yield`ing in a generator.
 
 ### Using a Channel
 
@@ -116,8 +116,10 @@ go(function *localProc(){
 	console.log( meaning );
 });
 
-// ********************************
-// and on in some remote context:
+// ***************************
+// and in some remote context:
+// ***************************
+// note: `remoteCh` already opened
 
 go(function *remoteProc(){
 	yield put( remoteCh, 42 );
@@ -130,13 +132,13 @@ That's pretty much it!
 
 It's very important to recognize that you will need a mechanism for determining (or generating) a unique string value for both a transport ID and a channel ID. These must both be unique within your application; you cannot use the same channel ID across two different transports.
 
-For example, if you have a Socket.io server process receiving incoming connections from clients, you'll obviously need to have a different transport ID for each client-server connection, since the server cannot use the same transport ID for multiple transports, and each transport must be directly connected to a socket.
+For example, if you have a Socket.io server process receiving incoming connections from multiple clients, you'll obviously need to have a different transport ID for each client-server connection, since the server cannot use the same transport ID for its multiple transports, and each transport must be directly connected to a specific client socket.
 
-Since both sides of a remote channel need to agree on the transport ID and channel ID, and since you may need to actually generate these values to ensure their uniqueness, you may very well have to pass the transport ID and/or channel ID manually to or from the remote context during initial connections.
+Since both sides of a remote channel need to agree on the transport ID and channel ID, and since you may need to actually generate these values to ensure their uniqueness, you may very well have to pass the transport ID and/or channel ID manually to/from the remote context during initial connections.
 
 In the code for the [Examples](#examples) (see below), you'll see one way of handling this: by passing the transport ID and channel ID in the URL for connection to a Web Worker or Socket.io server. For Node.js child processes, the IDs are passed along as shell arguments.
 
-How you choose to manage or send these IDs is entirely up to you. They just have to be unique and match on both sides.
+How you choose to generate, manage or transmit these IDs is entirely up to you. They just have to be unique and match on both sides. **They will be treated internally as strings.**
 
 ## Examples
 
@@ -147,22 +149,22 @@ See the [`examples/`](../../tree/master/examples/) directory for the following e
 * [Pi Digits](../../tree/master/examples/webworker-pi) (Web Worker)
 * [Long-running Loop](../../tree/master/examples/net-socket-client-server) (Node.js `net.Socket` Client / Server)
 
-To run the examples:
+To run these examples locally on your own system:
 
 1. Clone this repo
-2. Run `npm install` to install `devDependencies`
-3. For the examples with server components, start up the appropriate server at the command line with `node ____.js`
+2. In the root directory of this repo, run `npm install` to install its `devDependencies` (listed in `package.json`)
+3. For the examples with server components, start up the appropriate server process(s) at the command line with `node {server-filename}.js`
 4. For the examples with a web page UI:
-	* run a local file server (like `python -m SimpleHTTPServer 8080`, etc) in the root directory of this repo, to serve up the HTML/JS files to the browser
-	* open up the appropriate `index.html` file in your browser
+	* run a local file server (like `python -m SimpleHTTPServer 8080`, `node-static`, etc) in the root directory of this repo, simply to serve up the HTML/JS files to the browser under `localhost`
+	* navigate to the appropriate `index.html` file in your browser
 
 ## Known Issues
 
 This project is at a very early alpha stage. There are a number of caveats to be aware of:
 
-* An assumption is made of the method names for CSP actions: `put`, `take`, etc. If your lib's method names don't match, you may have to create your own adaptation layer.
+* An assumption is made of the method names for CSP actions: `put`, `take`, etc. If your lib's method names don't match, you may have to define your own adaptation/mapping logic.
 * Local CSP channels can have a buffer size > 1, but `RemoteCSPChannel` doesn't yet support those semantics. This is very difficult to achieve.
-* Currently only `put(..)` and `take(..)` is supported. CSP `alts(..)`, for example, is **much more complicated** to negotiate across multiple contexts, so they are not yet supported.
+* Currently only `put(..)` and `take(..)` are supported. CSP `alts(..)`, for example, is **much more complicated** to negotiate across multiple contexts, so they are not yet supported.
 * If you have a **local** `put(..)` and `take(..)` on the same **remote** channel, an assumption is made that you'd like to fulfill that action locally and not remotely. It will attempt to signal the remote context to tell it to cancel the first (already-messaged) remote behavior. However, that cancelation may not fully work yet, which means that remote channel may get into a weird state.
 
 ## License
